@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentWatch — AI Agent Observability</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+/* ============================================================
+   CSS Custom Properties
+   ============================================================ */
+:root {
+    --bg-primary: #0f1117;
+    --bg-card: #1a1d29;
+    --bg-card-hover: #1e2233;
+    --bg-surface: #151821;
+    --border-subtle: #2a2d3a;
+    --border-hover: #3a3d4a;
+
+    --blue: #3b82f6;
+    --blue-dim: rgba(59, 130, 246, 0.15);
+    --blue-glow: rgba(59, 130, 246, 0.3);
+    --emerald: #10b981;
+    --emerald-dim: rgba(16, 185, 129, 0.15);
+    --red: #ef4444;
+    --red-dim: rgba(239, 68, 68, 0.1);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245, 158, 11, 0.15);
+    --purple: #8b5cf6;
+    --purple-dim: rgba(139, 92, 246, 0.15);
+
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-dim: #475569;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+
+    --header-h: 56px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-card-hover: 0 8px 25px rgba(0,0,0,0.4), 0 3px 10px rgba(0,0,0,0.3);
+    --transition-fast: 150ms ease;
+    --transition-med: 250ms ease;
+    --transition-slow: 400ms ease;
+}
+
+/* ============================================================
+   Reset & Base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.5;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+/* ============================================================
+   Scrollbar
+   ============================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ============================================================
+   Shimmer / Skeleton
+   ============================================================ */
+@keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-card) 25%, #242838 50%, var(--bg-card) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.8s infinite ease-in-out;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-text { height: 14px; width: 60%; margin-bottom: 8px; }
+.skeleton-value { height: 34px; width: 45%; margin-bottom: 6px; }
+.skeleton-small { height: 12px; width: 40%; }
+
+/* ============================================================
+   Pulse Dot Animation
+   ============================================================ */
+@keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes pulse-dot {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+.header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--header-h);
+    background: rgba(15, 17, 23, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 100;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+    text-decoration: none;
+    user-select: none;
+}
+
+.logo-icon {
+    position: relative;
+    width: 10px;
+    height: 10px;
+}
+
+.logo-icon .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--blue);
+    animation: pulse-dot 2s infinite ease-in-out;
+}
+
+.logo-icon .ring {
+    position: absolute;
+    top: 0; left: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--blue);
+    animation: pulse-ring 2s infinite ease-out;
+}
+
+.header-center {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 20px;
+    padding: 3px 4px;
+}
+
+.time-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.time-btn:hover {
+    color: var(--text-primary);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.time-btn.active {
+    background: var(--blue);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--emerald);
+    padding: 4px 12px 4px 10px;
+    background: var(--emerald-dim);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 16px;
+}
+
+.live-indicator.disconnected {
+    color: var(--amber);
+    background: var(--amber-dim);
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+.live-indicator .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--emerald);
+    animation: pulse-dot 1.5s infinite ease-in-out;
+}
+
+.live-indicator.disconnected .live-dot {
+    background: var(--amber);
+    animation: none;
+}
+
+.refresh-info {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* ============================================================
+   Main Layout
+   ============================================================ */
+.main {
+    padding-top: calc(var(--header-h) + 16px);
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 24px;
+    max-width: 1600px;
+    margin: 0 auto;
+    display: grid;
+    gap: 16px;
+}
+
+/* ============================================================
+   Metric Cards Row
+   ============================================================ */
+.cards-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition-med);
+    cursor: default;
+}
+
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 3px 0 0 3px;
+}
+
+.metric-card:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-card-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card-hover);
+}
+
+.metric-card.blue::before  { background: linear-gradient(180deg, var(--blue), rgba(59,130,246,0.3)); }
+.metric-card.emerald::before { background: linear-gradient(180deg, var(--emerald), rgba(16,185,129,0.3)); }
+.metric-card.amber::before { background: linear-gradient(180deg, var(--amber), rgba(245,158,11,0.3)); }
+.metric-card.purple::before { background: linear-gradient(180deg, var(--purple), rgba(139,92,246,0.3)); }
+
+.card-label {
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.card-value {
+    font-family: var(--font-mono);
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    transition: all var(--transition-slow);
+}
+
+.card-value.blue   { color: var(--blue); }
+.card-value.emerald { color: var(--emerald); }
+.card-value.amber  { color: var(--amber); }
+.card-value.purple { color: var(--purple); }
+
+.card-subtitle {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-family: var(--font-mono);
+}
+
+.card-badge.green {
+    background: var(--emerald-dim);
+    color: var(--emerald);
+}
+
+.card-badge.red {
+    background: var(--red-dim);
+    color: var(--red);
+}
+
+.card-badge.amber {
+    background: var(--amber-dim);
+    color: var(--amber);
+}
+
+.card-sparkline {
+    position: absolute;
+    bottom: 12px;
+    right: 16px;
+    width: 80px;
+    height: 30px;
+    opacity: 0.5;
+}
+
+.agent-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.agent-tag {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--purple-dim);
+    color: var(--purple);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+/* ============================================================
+   Charts Row
+   ============================================================ */
+.charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.chart-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 18px 20px;
+    transition: border-color var(--transition-med);
+}
+
+.chart-panel:hover {
+    border-color: var(--border-hover);
+}
+
+.chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.chart-legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.chart-container {
+    position: relative;
+    height: 310px;
+}
+
+/* ============================================================
+   Bottom Section
+   ============================================================ */
+.bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    min-height: 420px;
+}
+
+/* ---- Event Feed ---- */
+.feed-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color var(--transition-med);
+}
+
+.feed-panel:hover { border-color: var(--border-hover); }
+
+.feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.feed-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.feed-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.feed-status.connected { color: var(--emerald); }
+.feed-status.reconnecting { color: var(--amber); }
+
+.feed-status .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.feed-status.connected .status-dot { background: var(--emerald); }
+.feed-status.reconnecting .status-dot { background: var(--amber); animation: pulse-dot 1s infinite; }
+
+.feed-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.feed-event {
+    display: grid;
+    grid-template-columns: 68px 90px 1fr 72px 90px 62px 56px 28px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(42, 45, 58, 0.4);
+    animation: fade-in var(--transition-med) ease-out;
+    transition: background var(--transition-fast);
+}
+
+.feed-event:hover {
+    background: rgba(59, 130, 246, 0.04);
+}
+
+.feed-event.error {
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.feed-event.error:hover {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.event-time {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.event-agent {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 8px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.event-agent.a0 { background: var(--blue-dim); color: var(--blue); }
+.event-agent.a1 { background: var(--purple-dim); color: var(--purple); }
+.event-agent.a2 { background: var(--emerald-dim); color: var(--emerald); }
+.event-agent.a3 { background: var(--amber-dim); color: var(--amber); }
+.event-agent.a4 { background: rgba(236,72,153,0.15); color: #ec4899; }
+
+.event-task {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.event-model {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.event-tokens {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.event-cost {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--emerald);
+    text-align: right;
+}
+
+.event-latency {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.event-status {
+    display: flex;
+    justify-content: center;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-indicator.success { background: var(--emerald); box-shadow: 0 0 6px rgba(16,185,129,0.4); }
+.status-indicator.error   { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+
+.feed-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+/* ---- Breakdown Panel ---- */
+.breakdown-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color var(--transition-med);
+}
+
+.breakdown-panel:hover { border-color: var(--border-hover); }
+
+.breakdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.breakdown-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.tab-group {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    padding: 2px;
+    border: 1px solid var(--border-subtle);
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.tab-btn:hover {
+    color: var(--text-secondary);
+}
+
+.tab-btn.active {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.breakdown-table-wrap {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.breakdown-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-surface);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-dim);
+    padding: 10px 16px;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.breakdown-table th:hover {
+    color: var(--text-secondary);
+}
+
+.breakdown-table th.sorted {
+    color: var(--blue);
+}
+
+.breakdown-table th .sort-arrow {
+    margin-left: 4px;
+    font-size: 9px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.breakdown-table th.sorted .sort-arrow {
+    opacity: 1;
+}
+
+.breakdown-table td {
+    padding: 10px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(42, 45, 58, 0.3);
+    white-space: nowrap;
+}
+
+.breakdown-table tbody tr:nth-child(even) {
+    background: rgba(26, 29, 41, 0.5);
+}
+
+.breakdown-table tbody tr:hover {
+    background: rgba(59, 130, 246, 0.04);
+}
+
+.breakdown-table .name-cell {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.breakdown-table .num-cell {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+}
+
+.breakdown-table .cost-cell {
+    font-family: var(--font-mono);
+    color: var(--emerald);
+}
+
+.error-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.error-bar {
+    width: 50px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--bg-surface);
+    overflow: hidden;
+}
+
+.error-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width var(--transition-med);
+}
+
+.error-bar-fill.green  { background: var(--emerald); }
+.error-bar-fill.amber  { background: var(--amber); }
+.error-bar-fill.red    { background: var(--red); }
+
+.error-pct {
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.error-pct.green  { color: var(--emerald); }
+.error-pct.amber  { color: var(--amber); }
+.error-pct.red    { color: var(--red); }
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 1200px) {
+    .cards-row { grid-template-columns: repeat(2, 1fr); }
+    .charts-row { grid-template-columns: 1fr; }
+    .bottom-row { grid-template-columns: 1fr; }
+    .feed-event {
+        grid-template-columns: 62px 80px 1fr 60px 60px 50px 28px;
+    }
+    .event-model { display: none; }
+}
+
+@media (max-width: 768px) {
+    .cards-row { grid-template-columns: 1fr; }
+    .header { padding: 0 12px; }
+    .header-center { display: none; }
+    .main { padding-left: 12px; padding-right: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     Header
+     ============================================================ -->
+<header class="header">
+    <div class="header-left">
+        <div class="logo">
+            <div class="logo-icon">
+                <div class="dot"></div>
+                <div class="ring"></div>
+            </div>
+            AgentWatch
+        </div>
+    </div>
+    <div class="header-center" id="timeRange">
+        <button class="time-btn" data-period="1h">1h</button>
+        <button class="time-btn active" data-period="24h">24h</button>
+        <button class="time-btn" data-period="7d">7d</button>
+        <button class="time-btn" data-period="30d">30d</button>
+    </div>
+    <div class="header-right">
+        <span class="refresh-info" id="refreshInfo">Updated just now</span>
+        <div class="live-indicator" id="liveIndicator">
+            <div class="live-dot"></div>
+            <span>Live</span>
+        </div>
+    </div>
+</header>
+
+<!-- ============================================================
+     Main Content
+     ============================================================ -->
+<main class="main">
+
+    <!-- Metric Cards -->
+    <section class="cards-row" id="cardsRow">
+        <!-- Total Cost -->
+        <div class="metric-card blue" id="cardCost">
+            <div class="card-label">Total Cost</div>
+            <div class="card-value blue" id="valCost">
+                <div class="skeleton skeleton-value"></div>
+            </div>
+            <div class="card-subtitle" id="subCost">
+                <div class="skeleton skeleton-small"></div>
+            </div>
+            <canvas class="card-sparkline" id="sparkCost"></canvas>
+        </div>
+        <!-- Requests -->
+        <div class="metric-card emerald" id="cardReqs">
+            <div class="card-label">Requests</div>
+            <div class="card-value emerald" id="valReqs">
+                <div class="skeleton skeleton-value"></div>
+            </div>
+            <div class="card-subtitle" id="subReqs">
+                <div class="skeleton skeleton-small"></div>
+            </div>
+            <canvas class="card-sparkline" id="sparkReqs"></canvas>
+        </div>
+        <!-- Latency -->
+        <div class="metric-card amber" id="cardLatency">
+            <div class="card-label">Latency (p50)</div>
+            <div class="card-value amber" id="valLatency">
+                <div class="skeleton skeleton-value"></div>
+            </div>
+            <div class="card-subtitle" id="subLatency">
+                <div class="skeleton skeleton-small"></div>
+            </div>
+        </div>
+        <!-- Active Agents -->
+        <div class="metric-card purple" id="cardAgents">
+            <div class="card-label">Active Agents</div>
+            <div class="card-value purple" id="valAgents">
+                <div class="skeleton skeleton-value"></div>
+            </div>
+            <div class="card-subtitle" id="subAgents">
+                <div class="skeleton skeleton-small"></div>
+            </div>
+            <div class="agent-tags" id="agentTags"></div>
+        </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="charts-row">
+        <!-- Cost & Tokens Chart -->
+        <div class="chart-panel">
+            <div class="chart-header">
+                <span class="chart-title">Cost & Tokens Over Time</span>
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:var(--blue)"></div>
+                        Cost ($)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:var(--purple)"></div>
+                        Tokens
+                    </div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartCost"></canvas>
+            </div>
+        </div>
+        <!-- Latency Chart -->
+        <div class="chart-panel">
+            <div class="chart-header">
+                <span class="chart-title">Latency Over Time</span>
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:var(--blue)"></div>
+                        p50
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:var(--amber)"></div>
+                        p95
+                    </div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartLatency"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- Bottom Panels -->
+    <section class="bottom-row">
+        <!-- Live Event Feed -->
+        <div class="feed-panel">
+            <div class="feed-header">
+                <span class="feed-title">Live Event Feed</span>
+                <div class="feed-status connected" id="feedStatus">
+                    <div class="status-dot"></div>
+                    <span>Connected</span>
+                </div>
+            </div>
+            <div class="feed-list" id="feedList">
+                <div class="feed-empty" id="feedEmpty">Waiting for events...</div>
+            </div>
+        </div>
+
+        <!-- Breakdown Tables -->
+        <div class="breakdown-panel">
+            <div class="breakdown-header">
+                <span class="breakdown-title">Breakdown</span>
+                <div class="tab-group" id="breakdownTabs">
+                    <button class="tab-btn active" data-group="agent_name">By Agent</button>
+                    <button class="tab-btn" data-group="model">By Model</button>
+                    <button class="tab-btn" data-group="task_name">By Task</button>
+                </div>
+            </div>
+            <div class="breakdown-table-wrap">
+                <table class="breakdown-table" id="breakdownTable">
+                    <thead>
+                        <tr>
+                            <th class="sorted" data-col="name">Name <span class="sort-arrow">&#9660;</span></th>
+                            <th data-col="requests">Requests <span class="sort-arrow">&#9660;</span></th>
+                            <th data-col="avg_latency">Avg Latency <span class="sort-arrow">&#9660;</span></th>
+                            <th data-col="total_cost">Cost <span class="sort-arrow">&#9660;</span></th>
+                            <th data-col="error_rate">Error Rate <span class="sort-arrow">&#9660;</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="breakdownBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<!-- ============================================================
+     JavaScript
+     ============================================================ -->
+<script>
+/* ============================================================
+   State
+   ============================================================ */
+let currentPeriod = '24h';
+let currentGroup = 'agent_name';
+let charts = { cost: null, latency: null };
+let eventSource = null;
+let feedEvents = [];
+let breakdownData = [];
+let sortCol = 'name';
+let sortAsc = true;
+let lastRefresh = Date.now();
+let refreshTimer = null;
+let sparklineCharts = {};
+
+const MAX_FEED_EVENTS = 50;
+const AGENT_COLORS = ['a0', 'a1', 'a2', 'a3', 'a4'];
+const agentColorMap = {};
+let agentColorIdx = 0;
+
+/* ============================================================
+   Formatting Helpers
+   ============================================================ */
+function fmtCost(v) {
+    if (v == null) return '$0.00';
+    if (v >= 1000) return '$' + (v / 1000).toFixed(2) + 'k';
+    return '$' + v.toFixed(2);
+}
+
+function fmtTokens(v) {
+    if (v == null) return '0';
+    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
+    if (v >= 1_000) return (v / 1_000).toFixed(1) + 'K';
+    return v.toLocaleString();
+}
+
+function fmtLatency(ms) {
+    if (ms == null) return '0ms';
+    if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
+    return Math.round(ms) + 'ms';
+}
+
+function fmtPct(v) {
+    if (v == null) return '0.0%';
+    return v.toFixed(1) + '%';
+}
+
+function fmtTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function fmtRelative(ts) {
+    const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+    if (diff < 5) return 'just now';
+    if (diff < 60) return Math.round(diff) + 's ago';
+    if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+    return Math.round(diff / 3600) + 'h ago';
+}
+
+function fmtChartTime(ts) {
+    const d = new Date(ts);
+    if (currentPeriod === '1h' || currentPeriod === '24h') {
+        return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function getAgentColor(name) {
+    if (!agentColorMap[name]) {
+        agentColorMap[name] = AGENT_COLORS[agentColorIdx % AGENT_COLORS.length];
+        agentColorIdx++;
+    }
+    return agentColorMap[name];
+}
+
+/* ============================================================
+   Chart Configuration
+   ============================================================ */
+const chartGridColor = 'rgba(42, 45, 58, 0.6)';
+const chartTickColor = '#64748b';
+
+function getChartDefaults() {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 600, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: 'rgba(15, 17, 23, 0.95)',
+                titleColor: '#e2e8f0',
+                bodyColor: '#94a3b8',
+                borderColor: '#2a2d3a',
+                borderWidth: 1,
+                padding: 12,
+                cornerRadius: 8,
+                titleFont: { family: '-apple-system, sans-serif', size: 12, weight: '600' },
+                bodyFont: { family: 'SF Mono, Consolas, monospace', size: 11 },
+                displayColors: true,
+                boxPadding: 4,
+            },
+        },
+    };
+}
+
+function initCharts() {
+    const costCtx = document.getElementById('chartCost').getContext('2d');
+    const latCtx = document.getElementById('chartLatency').getContext('2d');
+
+    const costGrad = costCtx.createLinearGradient(0, 0, 0, 310);
+    costGrad.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+    costGrad.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+    charts.cost = new Chart(costCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Cost ($)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: costGrad,
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#3b82f6',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
+                    yAxisID: 'yCost',
+                },
+                {
+                    label: 'Tokens',
+                    data: [],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'transparent',
+                    fill: false,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    borderDash: [4, 3],
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#8b5cf6',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
+                    yAxisID: 'yTokens',
+                },
+            ],
+        },
+        options: {
+            ...getChartDefaults(),
+            scales: {
+                x: {
+                    grid: { color: chartGridColor, drawBorder: false },
+                    ticks: { color: chartTickColor, font: { size: 10 }, maxRotation: 0, maxTicksLimit: 8 },
+                },
+                yCost: {
+                    position: 'left',
+                    grid: { color: chartGridColor, drawBorder: false },
+                    ticks: {
+                        color: '#3b82f6',
+                        font: { size: 10, family: 'SF Mono, Consolas, monospace' },
+                        callback: v => '$' + v.toFixed(2),
+                    },
+                    beginAtZero: true,
+                },
+                yTokens: {
+                    position: 'right',
+                    grid: { display: false },
+                    ticks: {
+                        color: '#8b5cf6',
+                        font: { size: 10, family: 'SF Mono, Consolas, monospace' },
+                        callback: v => fmtTokens(v),
+                    },
+                    beginAtZero: true,
+                },
+            },
+            plugins: {
+                ...getChartDefaults().plugins,
+                tooltip: {
+                    ...getChartDefaults().plugins.tooltip,
+                    callbacks: {
+                        label: ctx => {
+                            if (ctx.datasetIndex === 0) return ' Cost: ' + fmtCost(ctx.parsed.y);
+                            return ' Tokens: ' + fmtTokens(ctx.parsed.y);
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    charts.latency = new Chart(latCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'p95',
+                    data: [],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                    fill: '+1',
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#f59e0b',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
+                    order: 1,
+                },
+                {
+                    label: 'p50',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    fill: 'origin',
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#3b82f6',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
+                    order: 2,
+                },
+            ],
+        },
+        options: {
+            ...getChartDefaults(),
+            scales: {
+                x: {
+                    grid: { color: chartGridColor, drawBorder: false },
+                    ticks: { color: chartTickColor, font: { size: 10 }, maxRotation: 0, maxTicksLimit: 8 },
+                },
+                y: {
+                    grid: { color: chartGridColor, drawBorder: false },
+                    ticks: {
+                        color: chartTickColor,
+                        font: { size: 10, family: 'SF Mono, Consolas, monospace' },
+                        callback: v => fmtLatency(v),
+                    },
+                    beginAtZero: true,
+                },
+            },
+            plugins: {
+                ...getChartDefaults().plugins,
+                tooltip: {
+                    ...getChartDefaults().plugins.tooltip,
+                    callbacks: {
+                        label: ctx => {
+                            const label = ctx.datasetIndex === 0 ? 'p95' : 'p50';
+                            return ' ' + label + ': ' + fmtLatency(ctx.parsed.y);
+                        },
+                    },
+                },
+            },
+        },
+    });
+}
+
+/* ============================================================
+   Sparkline Mini-Charts
+   ============================================================ */
+function drawSparkline(canvasId, data, color) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    if (sparklineCharts[canvasId]) {
+        sparklineCharts[canvasId].destroy();
+    }
+
+    const grad = ctx.createLinearGradient(0, 0, 0, 30);
+    grad.addColorStop(0, color.replace(')', ', 0.4)').replace('rgb', 'rgba'));
+    grad.addColorStop(1, color.replace(')', ', 0.0)').replace('rgb', 'rgba'));
+
+    sparklineCharts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map((_, i) => i),
+            datasets: [{
+                data: data,
+                borderColor: color,
+                backgroundColor: grad,
+                fill: true,
+                tension: 0.4,
+                borderWidth: 1.5,
+                pointRadius: 0,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 500 },
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+                x: { display: false },
+                y: { display: false },
+            },
+        },
+    });
+}
+
+/* ============================================================
+   Data Fetching
+   ============================================================ */
+async function fetchJSON(url) {
+    try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(r.status);
+        return await r.json();
+    } catch (e) {
+        console.warn('Fetch error:', url, e);
+        return null;
+    }
+}
+
+async function fetchAllData() {
+    const [summary, timeseries, breakdown] = await Promise.all([
+        fetchJSON(`/api/metrics/summary?period=${currentPeriod}`),
+        fetchJSON(`/api/metrics/timeseries?period=${currentPeriod}`),
+        fetchJSON(`/api/metrics/breakdown?group_by=${currentGroup}&period=${currentPeriod}`),
+    ]);
+
+    if (summary) updateCards(summary);
+    if (timeseries) updateCharts(timeseries);
+    if (breakdown) {
+        breakdownData = breakdown;
+        renderBreakdown();
+    }
+
+    lastRefresh = Date.now();
+    updateRefreshInfo();
+}
+
+/* ============================================================
+   Update Functions
+   ============================================================ */
+function updateCards(s) {
+    // Total Cost
+    document.getElementById('valCost').textContent = fmtCost(s.total_cost);
+    document.getElementById('subCost').innerHTML = 'in selected period';
+
+    // Requests
+    document.getElementById('valReqs').textContent = fmtTokens(s.total_requests);
+    const successPct = s.success_rate != null ? s.success_rate : 100;
+    const badgeClass = successPct >= 95 ? 'green' : successPct >= 80 ? 'amber' : 'red';
+    document.getElementById('subReqs').innerHTML =
+        `<span class="card-badge ${badgeClass}">${fmtPct(successPct)} success</span>`;
+
+    // Latency
+    document.getElementById('valLatency').textContent = fmtLatency(s.latency_p50);
+    document.getElementById('subLatency').innerHTML =
+        `p95: <strong style="color:var(--text-secondary)">${fmtLatency(s.latency_p95)}</strong>`;
+
+    // Active Agents
+    const agents = s.active_agents || [];
+    document.getElementById('valAgents').textContent = agents.length;
+    document.getElementById('subAgents').innerHTML = 'agents active';
+    const tagsEl = document.getElementById('agentTags');
+    tagsEl.innerHTML = '';
+    agents.forEach(a => {
+        const tag = document.createElement('span');
+        tag.className = 'agent-tag';
+        tag.textContent = a;
+        tagsEl.appendChild(tag);
+    });
+
+    // Sparklines from summary
+    if (s.cost_trend) drawSparkline('sparkCost', s.cost_trend, 'rgb(59, 130, 246)');
+    if (s.request_trend) drawSparkline('sparkReqs', s.request_trend, 'rgb(16, 185, 129)');
+}
+
+function updateCharts(ts) {
+    const labels = (ts.timestamps || []).map(fmtChartTime);
+
+    // Cost & Tokens chart
+    charts.cost.data.labels = labels;
+    charts.cost.data.datasets[0].data = ts.cost || [];
+    charts.cost.data.datasets[1].data = ts.tokens || [];
+    charts.cost.update('none');
+    charts.cost.update();
+
+    // Latency chart
+    charts.latency.data.labels = labels;
+    charts.latency.data.datasets[0].data = ts.latency_p95 || [];
+    charts.latency.data.datasets[1].data = ts.latency_p50 || [];
+    charts.latency.update('none');
+    charts.latency.update();
+}
+
+/* ============================================================
+   Breakdown Table
+   ============================================================ */
+function renderBreakdown() {
+    const tbody = document.getElementById('breakdownBody');
+    if (!breakdownData || !breakdownData.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:32px;">No data</td></tr>';
+        return;
+    }
+
+    const sorted = [...breakdownData].sort((a, b) => {
+        let va = a[sortCol], vb = b[sortCol];
+        if (typeof va === 'string') {
+            return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        }
+        return sortAsc ? va - vb : vb - va;
+    });
+
+    tbody.innerHTML = sorted.map(row => {
+        const errPct = row.error_rate || 0;
+        const errColor = errPct < 5 ? 'green' : errPct < 15 ? 'amber' : 'red';
+        const barWidth = Math.min(errPct * 2, 100);
+        return `<tr>
+            <td class="name-cell">${esc(row.name)}</td>
+            <td class="num-cell">${fmtTokens(row.requests)}</td>
+            <td class="num-cell">${fmtLatency(row.avg_latency)}</td>
+            <td class="cost-cell">${fmtCost(row.total_cost)}</td>
+            <td>
+                <div class="error-bar-wrap">
+                    <div class="error-bar"><div class="error-bar-fill ${errColor}" style="width:${barWidth}%"></div></div>
+                    <span class="error-pct ${errColor}">${fmtPct(errPct)}</span>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
+/* ============================================================
+   Event Feed (SSE)
+   ============================================================ */
+function connectSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource('/api/stream');
+
+    eventSource.onopen = () => {
+        setSSEStatus(true);
+    };
+
+    eventSource.onmessage = (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            addEventToFeed(event);
+        } catch (err) {
+            console.warn('SSE parse error:', err);
+        }
+    };
+
+    eventSource.onerror = () => {
+        setSSEStatus(false);
+        eventSource.close();
+        eventSource = null;
+        setTimeout(connectSSE, 3000);
+    };
+}
+
+function setSSEStatus(connected) {
+    const indicator = document.getElementById('liveIndicator');
+    const feedStatus = document.getElementById('feedStatus');
+
+    if (connected) {
+        indicator.className = 'live-indicator';
+        indicator.querySelector('span').textContent = 'Live';
+        feedStatus.className = 'feed-status connected';
+        feedStatus.querySelector('span').textContent = 'Connected';
+    } else {
+        indicator.className = 'live-indicator disconnected';
+        indicator.querySelector('span').textContent = 'Reconnecting';
+        feedStatus.className = 'feed-status reconnecting';
+        feedStatus.querySelector('span').textContent = 'Reconnecting...';
+    }
+}
+
+function addEventToFeed(event) {
+    const feedEmpty = document.getElementById('feedEmpty');
+    if (feedEmpty) feedEmpty.remove();
+
+    feedEvents.unshift(event);
+    if (feedEvents.length > MAX_FEED_EVENTS) {
+        feedEvents.pop();
+    }
+
+    const feedList = document.getElementById('feedList');
+    const el = createEventRow(event);
+
+    if (feedList.firstChild) {
+        feedList.insertBefore(el, feedList.firstChild);
+    } else {
+        feedList.appendChild(el);
+    }
+
+    // Trim excess
+    while (feedList.children.length > MAX_FEED_EVENTS) {
+        feedList.removeChild(feedList.lastChild);
+    }
+}
+
+function createEventRow(ev) {
+    const row = document.createElement('div');
+    const isError = ev.status === 'error';
+    row.className = 'feed-event' + (isError ? ' error' : '');
+
+    const agentColorClass = getAgentColor(ev.agent_name || 'unknown');
+    const tokIn = ev.input_tokens != null ? fmtTokens(ev.input_tokens) : '-';
+    const tokOut = ev.output_tokens != null ? fmtTokens(ev.output_tokens) : '-';
+
+    row.innerHTML = `
+        <span class="event-time">${fmtTime(ev.timestamp || new Date().toISOString())}</span>
+        <span class="event-agent ${agentColorClass}" title="${esc(ev.agent_name || '')}">${esc(ev.agent_name || 'unknown')}</span>
+        <span class="event-task" title="${esc(ev.task_name || '')}">${esc(ev.task_name || '-')}</span>
+        <span class="event-model" title="${esc(ev.model || '')}">${esc(ev.model || '-')}</span>
+        <span class="event-tokens">${tokIn}/${tokOut}</span>
+        <span class="event-cost">${fmtCost(ev.cost_usd)}</span>
+        <span class="event-latency">${fmtLatency(ev.latency_ms)}</span>
+        <span class="event-status"><span class="status-indicator ${isError ? 'error' : 'success'}"></span></span>
+    `;
+
+    return row;
+}
+
+/* ============================================================
+   Time Range & Tabs
+   ============================================================ */
+function setupTimeRangeButtons() {
+    document.getElementById('timeRange').addEventListener('click', e => {
+        const btn = e.target.closest('.time-btn');
+        if (!btn) return;
+
+        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        currentPeriod = btn.dataset.period;
+        fetchAllData();
+    });
+}
+
+function setupBreakdownTabs() {
+    document.getElementById('breakdownTabs').addEventListener('click', e => {
+        const btn = e.target.closest('.tab-btn');
+        if (!btn) return;
+
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        currentGroup = btn.dataset.group;
+        fetchJSON(`/api/metrics/breakdown?group_by=${currentGroup}&period=${currentPeriod}`).then(data => {
+            if (data) {
+                breakdownData = data;
+                renderBreakdown();
+            }
+        });
+    });
+}
+
+function setupTableSort() {
+    document.getElementById('breakdownTable').querySelector('thead').addEventListener('click', e => {
+        const th = e.target.closest('th');
+        if (!th) return;
+
+        const col = th.dataset.col;
+        if (sortCol === col) {
+            sortAsc = !sortAsc;
+        } else {
+            sortCol = col;
+            sortAsc = true;
+        }
+
+        document.querySelectorAll('.breakdown-table th').forEach(h => {
+            h.classList.remove('sorted');
+            h.querySelector('.sort-arrow').innerHTML = '&#9660;';
+        });
+        th.classList.add('sorted');
+        th.querySelector('.sort-arrow').innerHTML = sortAsc ? '&#9650;' : '&#9660;';
+
+        renderBreakdown();
+    });
+}
+
+/* ============================================================
+   Refresh Info
+   ============================================================ */
+function updateRefreshInfo() {
+    const el = document.getElementById('refreshInfo');
+    const diffSec = Math.round((Date.now() - lastRefresh) / 1000);
+    if (diffSec < 5) {
+        el.textContent = 'Updated just now';
+    } else if (diffSec < 60) {
+        el.textContent = `Updated ${diffSec}s ago`;
+    } else {
+        el.textContent = `Updated ${Math.round(diffSec / 60)}m ago`;
+    }
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+    initCharts();
+    connectSSE();
+    fetchAllData();
+    setupTimeRangeButtons();
+    setupBreakdownTabs();
+    setupTableSort();
+
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+        fetchAllData();
+    }, 30000);
+
+    // Update "Updated X ago" text every 5 seconds
+    setInterval(updateRefreshInfo, 5000);
+});
+</script>
+</body>
+</html>
